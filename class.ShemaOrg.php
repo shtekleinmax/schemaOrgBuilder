@@ -7,6 +7,7 @@
 class ShemaOrg {
 
     public $siteLogo = 'images/logo.svg';
+	public $compress = false;
 
     private $shemaOrgContext = 'http://schema.org';
 	private $siteUrl = '';
@@ -26,7 +27,7 @@ class ShemaOrg {
    	}
 
 
-    public function displayShemaOrg(array $content = [], string $type = 'Article')
+    public function displayShemaOrg(array $content = [], string $type = 'Article'): string
     {
 		if (empty($content)) {
 			return '';
@@ -49,16 +50,25 @@ class ShemaOrg {
                 $shemaOrgJson = $this->buildReviews($content);
                 break;
 
+			case 'Recipe':
+				$shemaOrgJson = $this->buildRecipe($content);
+
 			default:
 				$shemaOrgJson = $this->buildArticle($content);
 				break;
 		}
 
-        return !empty($shemaOrgJson) ? json_encode($shemaOrgJson, JSON_UNESCAPED_UNICODE) : '';
+		if (!empty($shemaOrgJson)) {
+			$result = !empty($this->compress) ? json_encode($shemaOrgJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : json_encode($shemaOrgJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+
+			return $result.PHP_EOL;
+		}
+
+		return '';
 	}
 
 
-    private function buildArticle(array $content = [])
+    private function buildArticle(array $content = []): array
     {
 		$shemaOrgObject = [
 			"@context" => $this->shemaOrgContext,
@@ -86,17 +96,18 @@ class ShemaOrg {
 		}
 
 		if (!empty($content['author'])) {
-			$shemaOrgObject["author"] = [
-				"@type"	=> 'Person',
-				"name"  => $content['author']
-			];
+			$shemaOrgObject["author"] = $this->getAuthors($content['author']);
 		}
 
 		if (!empty($content['editor'])) {
-			$shemaOrgObject["author"] = [
-				"@type"	=> 'Person',
-				"name"  => $content['editor']
-			];
+			$editors = explode(',', $content['editor']);
+
+			foreach ($editors as $editor) {
+				$shemaOrgObject["editor"][] = [
+					"@type"	=> 'Person',
+					"name"  => trim($editor),
+				];
+			}
 		}
 
 		$shemaOrgObject["publisher"] = [
@@ -118,7 +129,7 @@ class ShemaOrg {
 	}
 
 
-    private function buildBreadCrumbs(array $navigationList = [])
+    private function buildBreadCrumbs(array $navigationList = []): array
     {
         $i = 1;
 
@@ -152,7 +163,7 @@ class ShemaOrg {
 	}
 
 
-    private function buildFAQ(array $faqList = [])
+    private function buildFAQ(array $faqList = []): array
     {
         $shemaOrgObject = [
 			"@context" => $this->shemaOrgContext,
@@ -178,5 +189,81 @@ class ShemaOrg {
     {
         return [];
     }
+
+	private function buildRecipe(array $content = [])
+	{
+		$shemaOrgObject = [
+			"@context" => $this->shemaOrgContext,
+			"@type"    => 'Recipe',
+			"name"	   => $content['title']
+		];
+
+		if (!empty($content['image'])) {
+			$shemaOrg['image'] = $this->siteUrl.'imagine/'.$content['preset'].'/'.$content['image'];
+		}
+
+		if (!empty($content['author'])) {
+			$shemaOrgObject['author'] = $this->getAuthors($content['author']);
+		}
+
+		if (!empty($content['date'])) {
+			$shemaOrgObject["datePublished"] = $content['date'];
+		}
+
+		if (!empty($content['description'])) {
+			$shemaOrgObject["description"] = $content['description'];
+		}
+
+	}
+
+
+	private function getAuthors($authors = ''): array
+	{
+		if (empty($authors)) {
+			return [];
+		}
+
+		if (is_string($authors)) {
+			$authors = $this->convertAuthorsStringToArray($authors);
+		}
+
+		if (!is_array($authors)) {
+			return [];
+		}
+
+		foreach ($authors as $author) {
+			$authorInfo = [
+				"@type"	=> !empty($author['is_organization']) ? 'Organization' : 'Person',
+				"name"  => trim($author),
+			];
+
+			if (!empty($author['url'])) {
+				$authorInfo['url'] = $author['url'];
+			}
+
+			if (!empty($author['job_title'])) {
+				$authorInfo['jobTitle'] = $author['job_title'];
+			}
+
+			$shemaOrgAuthor[] = $authorInfo;
+		}
+
+		return $shemaOrgAuthor;
+	}
+
+
+	private function convertAuthorsStringToArray(string $authorsField = '')
+	{
+		$authors = explode(',', $authorsField);
+
+		foreach ($authors as $author) {
+			$result[] = [
+				"name" => trim($author),
+			];
+		}
+
+		return $result;
+	}
+
 }
 ?>
